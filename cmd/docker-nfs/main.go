@@ -10,7 +10,10 @@ import (
 	"github.com/mendelgusmao/docker-nfs/lib/orchestrator"
 )
 
-const dockernfsFile = ".dockernfs"
+const (
+	dockernfsFile = ".dockernfs"
+	vOption       = "-v"
+)
 
 func init() {
 	log.SetPrefix("[docker-nfs] ")
@@ -18,9 +21,10 @@ func init() {
 
 func main() {
 	o := orchestrator.New()
+	fixedPaths, ok := tryLoadingDockerNFSFile()
 
-	if paths, ok := tryLoadingDockerNFSFile(); ok {
-		for _, path := range paths {
+	if ok {
+		for _, path := range fixedPaths {
 			absPath, err := filepath.Abs(path)
 
 			if err != nil {
@@ -29,6 +33,26 @@ func main() {
 			}
 
 			o.CreateServer(absPath)
+		}
+	}
+
+	for index, arg := range os.Args {
+		next := index + 1
+
+		if arg == vOption && next < len(os.Args) {
+			clPath := os.Args[next]
+			hasFixedPath := false
+
+			for _, fixedPath := range fixedPaths {
+				if strings.HasPrefix(clPath, fixedPath) {
+					hasFixedPath = true
+					continue
+				}
+			}
+
+			if !hasFixedPath {
+				o.CreateServer(clPath)
+			}
 		}
 	}
 

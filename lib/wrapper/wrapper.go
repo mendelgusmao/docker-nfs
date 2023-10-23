@@ -45,12 +45,27 @@ func (w *Wrapper) createNFSServers() error {
 			absPath, err := filepath.Abs(path)
 
 			if err != nil {
-				return fmt.Errorf("failed to get absolute path for %s: %v\n", path, err)
+				return fmt.Errorf("failed to get absolute path for `%s`: %v\n", path, err)
 			}
 
 			w.orchestrator.CreateServer(absPath)
 		}
 	}
+
+	volumes, _, err := w.extractVolumes()
+
+	if err != nil {
+		return err
+	}
+
+	return w.createNFSServersFromVolumes(fixedPaths, volumes)
+}
+
+func (w *Wrapper) extractVolumes() ([]*Volume, []string, error) {
+	volumes := make([]*Volume, 0)
+	skip := make(map[int]any, 0)
+	filteredArgs := make([]string, 0)
+	copy(filteredArgs, w.args)
 
 	for index, arg := range w.args {
 		next := index + 1
@@ -58,34 +73,43 @@ func (w *Wrapper) createNFSServers() error {
 
 		if isVOption && next < len(w.args) {
 			clVolume := w.args[next]
-			err := w.createNFSServerFromVOption(fixedPaths, clVolume)
+			volume, err := volumeFromVOption(clVolume)
 
 			if err != nil {
-				return err
+				return nil, nil, err
 			}
+
+			volumes = append(volumes, volume)
+			skip[index] = nil
+			skip[next] = nil
 		}
 	}
 
-	return nil
-}
-
-func (w *Wrapper) createNFSServerFromVOption(fixedPaths []string, clVolume string) error {
-	hasFixedPath := false
-	volume, err := volumeFromVOption(clVolume)
-
-	if err != nil {
-		return err
-	}
-
-	for _, fixedPath := range fixedPaths {
-		if strings.HasPrefix(volume.Destination, fixedPath) {
-			hasFixedPath = true
+	for index, arg := range w.args {
+		if _, ok := skip[index]; ok {
 			continue
 		}
+
+		filteredArgs = append(filteredArgs, arg)
 	}
 
-	if !hasFixedPath {
-		w.orchestrator.CreateServer(volume.Destination)
+	return volumes, filteredArgs, nil
+}
+
+func (w *Wrapper) createNFSServersFromVolumes(fixedPaths []string, volumes []*Volume) error {
+	for _, volume := range volumes {
+		hasFixedPath := false
+
+		for _, fixedPath := range fixedPaths {
+			if strings.HasPrefix(volume.Destination, fixedPath) {
+				hasFixedPath = true
+				break
+			}
+		}
+
+		if !hasFixedPath {
+			w.orchestrator.CreateServer(volume.Destination)
+		}
 	}
 
 	return nil

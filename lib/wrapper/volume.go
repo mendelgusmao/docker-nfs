@@ -14,7 +14,7 @@ type Volume struct {
 func volumeFromVOption(arg string) (*Volume, error) {
 	parts := strings.Split(arg, ":")
 
-	if len(parts) == 1 {
+	if len(parts) < 2 {
 		return nil, fmt.Errorf("invalid volume: `%s`", arg)
 	}
 

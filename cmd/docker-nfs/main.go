@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/mendelgusmao/docker-nfs/lib/config"
 	"github.com/mendelgusmao/docker-nfs/lib/wrapper"
 )
 
@@ -12,7 +13,13 @@ func init() {
 }
 
 func main() {
-	w := wrapper.New(os.Args)
-	err := w.Wrap()
+	config, err := config.Load()
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	w := wrapper.New(*config, os.Args)
+	err = w.Wrap()
 	log.Fatalln(err)
 }

@@ -58,7 +58,7 @@ func (w *Wrapper) Wrap() error {
 func (w *Wrapper) createNFSVolumes() error {
 	for _, volume := range w.volumes {
 		args := append(dockerVolumeCreateArgs, volume.ToCLOptions()...)
-		cmd := exec.Command("/usr/bin/docker", args...)
+		cmd := exec.Command(w.config.DockerPath, args...)
 
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout

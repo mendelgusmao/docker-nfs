@@ -2,9 +2,13 @@ package wrapper
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/mendelgusmao/docker-nfs/lib/config"
 	"github.com/mendelgusmao/docker-nfs/lib/orchestrator"
 )
 
@@ -13,17 +17,26 @@ var (
 		"-v":       nil,
 		"--volume": nil,
 	}
+	dockerVolumeCreateArgs = []string{"volume", "create", "--driver", "local"}
 )
 
 type Wrapper struct {
+	config       config.Config
 	args         []string
 	orchestrator *orchestrator.Orchestrator
+	fixedPaths   []string
+	volumes      []*Volume
 }
 
-func New(args []string) *Wrapper {
+func New(config config.Config, args []string) *Wrapper {
+	fixedPaths := make([]string, len(config.Paths))
+	copy(fixedPaths, config.Paths)
+
 	return &Wrapper{
+		config:       config,
+		fixedPaths:   fixedPaths,
 		args:         args,
-		orchestrator: orchestrator.New(),
+		orchestrator: orchestrator.New(config),
 	}
 }
 
@@ -34,35 +47,62 @@ func (w *Wrapper) Wrap() error {
 		return err
 	}
 
+	if err = w.createNFSVolumes(); err != nil {
+		return err
+	}
+
 	w.orchestrator.Wait()
 	return nil
 }
 
-func (w *Wrapper) createNFSServers() ([]string, error) {
-	fixedPaths, ok := tryLoadingDockerNFSFile()
+func (w *Wrapper) createNFSVolumes() error {
+	for _, volume := range w.volumes {
+		args := append(dockerVolumeCreateArgs, volume.ToCLOptions()...)
+		cmd := exec.Command("/usr/bin/docker", args...)
 
-	if ok {
-		for index, path := range fixedPaths {
-			absPath, err := filepath.Abs(path)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
 
-			if err != nil {
-				return nil, fmt.Errorf("failed to get absolute path for `%s`: %v\n", path, err)
-			}
-
-			fixedPaths[index] = absPath
+		if err := cmd.Run(); err != nil {
+			return err
 		}
 	}
 
-	volumes, filteredArgs, err := w.extractVolumes()
+	return nil
+}
+
+func (w *Wrapper) createNFSServers() ([]string, error) {
+	for index, path := range w.fixedPaths {
+		absPath, err := filepath.Abs(path)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to get absolute path for `%s`: %v\n", path, err)
+		}
+
+		w.fixedPaths[index] = absPath
+	}
+
+	filteredArgs, err := w.extractVolumes()
 
 	if err != nil {
 		return nil, err
 	}
 
-	return filteredArgs, w.createNFSServersFromVolumes(fixedPaths, volumes)
+	err = w.createNFSServersFromVolumes()
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, v := range w.volumes {
+		log.Printf("%+#v\n", v)
+	}
+
+	return filteredArgs, err
 }
 
-func (w *Wrapper) extractVolumes() ([]*Volume, []string, error) {
+func (w *Wrapper) extractVolumes() ([]string, error) {
 	volumes := make([]*Volume, 0)
 	skip := make(map[int]any, 0)
 	filteredArgs := make([]string, 0)
@@ -77,7 +117,7 @@ func (w *Wrapper) extractVolumes() ([]*Volume, []string, error) {
 			volume, err := volumeFromVOption(clVolume)
 
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 
 			volumes = append(volumes, volume)
@@ -94,14 +134,16 @@ func (w *Wrapper) extractVolumes() ([]*Volume, []string, error) {
 		filteredArgs = append(filteredArgs, arg)
 	}
 
-	return volumes, filteredArgs, nil
+	w.volumes = volumes
+
+	return filteredArgs, nil
 }
 
-func (w *Wrapper) createNFSServersFromVolumes(fixedPaths []string, volumes []*Volume) error {
-	for _, volume := range volumes {
-		serverPath := volume.Destination
+func (w *Wrapper) createNFSServersFromVolumes() error {
+	for _, volume := range w.volumes {
+		serverPath := volume.Source
 
-		for _, fixedPath := range fixedPaths {
+		for _, fixedPath := range w.fixedPaths {
 			if strings.HasPrefix(volume.Destination, fixedPath) {
 				serverPath = fixedPath
 				break

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -15,5 +14,5 @@ func init() {
 func main() {
 	w := wrapper.New(os.Args)
 	err := w.Wrap()
-	fmt.Println(err)
+	log.Fatalln(err)
 }

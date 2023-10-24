@@ -2,13 +2,22 @@ package wrapper
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
+const clTemplate = "--opt type=nfs --opt o=addr=%s,rw --opt device=:%s %s"
+
 type Volume struct {
-	Source      string
-	Destination string
-	Options     string
+	Source        string
+	Destination   string
+	Options       string
+	ServerAddress string
+	Name          string
+}
+
+func (v Volume) ToCLOptions() string {
+	return fmt.Sprintf(clTemplate, v.ServerAddress, v.Destination, v.Name)
 }
 
 func volumeFromVOption(arg string) (*Volume, error) {
@@ -33,9 +42,12 @@ func volumeFromVOption(arg string) (*Volume, error) {
 		options = parts[2]
 	}
 
+	name := strings.Replace(strings.ToLower(source), string(os.PathSeparator), "_", -1)
+
 	return &Volume{
 		Source:      source,
 		Destination: destination,
 		Options:     options,
+		Name:        name,
 	}, nil
 }

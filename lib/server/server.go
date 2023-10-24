@@ -47,3 +47,7 @@ func (s *Server) Serve() error {
 func (s *Server) Stop() {
 	s.Context.Done()
 }
+
+func (s *Server) Address() string {
+	return s.listener.Addr().String()
+}

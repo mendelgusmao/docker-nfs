@@ -28,37 +28,38 @@ func New(args []string) *Wrapper {
 }
 
 func (w *Wrapper) Wrap() error {
-	if err := w.createNFSServers(); err != nil {
-		return err
-	}
-
-	w.orchestrator.Wait()
-
-	return nil
-}
-
-func (w *Wrapper) createNFSServers() error {
-	fixedPaths, ok := tryLoadingDockerNFSFile()
-
-	if ok {
-		for _, path := range fixedPaths {
-			absPath, err := filepath.Abs(path)
-
-			if err != nil {
-				return fmt.Errorf("failed to get absolute path for `%s`: %v\n", path, err)
-			}
-
-			w.orchestrator.CreateServer(absPath)
-		}
-	}
-
-	volumes, _, err := w.extractVolumes()
+	_, err := w.createNFSServers()
 
 	if err != nil {
 		return err
 	}
 
-	return w.createNFSServersFromVolumes(fixedPaths, volumes)
+	w.orchestrator.Wait()
+	return nil
+}
+
+func (w *Wrapper) createNFSServers() ([]string, error) {
+	fixedPaths, ok := tryLoadingDockerNFSFile()
+
+	if ok {
+		for index, path := range fixedPaths {
+			absPath, err := filepath.Abs(path)
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to get absolute path for `%s`: %v\n", path, err)
+			}
+
+			fixedPaths[index] = absPath
+		}
+	}
+
+	volumes, filteredArgs, err := w.extractVolumes()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return filteredArgs, w.createNFSServersFromVolumes(fixedPaths, volumes)
 }
 
 func (w *Wrapper) extractVolumes() ([]*Volume, []string, error) {
@@ -98,18 +99,22 @@ func (w *Wrapper) extractVolumes() ([]*Volume, []string, error) {
 
 func (w *Wrapper) createNFSServersFromVolumes(fixedPaths []string, volumes []*Volume) error {
 	for _, volume := range volumes {
-		hasFixedPath := false
+		serverPath := volume.Destination
 
 		for _, fixedPath := range fixedPaths {
 			if strings.HasPrefix(volume.Destination, fixedPath) {
-				hasFixedPath = true
+				serverPath = fixedPath
 				break
 			}
 		}
 
-		if !hasFixedPath {
-			w.orchestrator.CreateServer(volume.Destination)
+		server, err := w.orchestrator.CreateServer(serverPath)
+
+		if err != nil {
+			return err
 		}
+
+		volume.ServerAddress = server.Address()
 	}
 
 	return nil

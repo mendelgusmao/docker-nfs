@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 
+	"github.com/mendelgusmao/docker-nfs/lib/config"
 	"github.com/willscott/memphis"
 
 	nfs "github.com/willscott/go-nfs"
@@ -17,8 +18,8 @@ type Server struct {
 	listener net.Listener
 }
 
-func Create(path string) (*Server, error) {
-	listener, err := net.Listen("tcp", ":0")
+func Create(config config.Config, path string) (*Server, error) {
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:0", config.Iface))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen: %v\n", err)

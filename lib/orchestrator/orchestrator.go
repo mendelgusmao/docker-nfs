@@ -3,17 +3,20 @@ package orchestrator
 import (
 	"fmt"
 
+	"github.com/mendelgusmao/docker-nfs/lib/config"
 	"github.com/mendelgusmao/docker-nfs/lib/server"
 	nfsserver "github.com/mendelgusmao/docker-nfs/lib/server"
 )
 
 type Orchestrator struct {
+	config  config.Config
 	servers map[string]*server.Server
 	done    chan any
 }
 
-func New() *Orchestrator {
+func New(config config.Config) *Orchestrator {
 	return &Orchestrator{
+		config:  config,
 		servers: make(map[string]*server.Server, 0),
 		done:    make(chan any, 0),
 	}
@@ -24,7 +27,7 @@ func (o *Orchestrator) CreateServer(path string) (*server.Server, error) {
 		return server, nil
 	}
 
-	server, err := nfsserver.Create(path)
+	server, err := nfsserver.Create(o.config, path)
 
 	if err != nil {
 		return nil, err
@@ -46,14 +49,6 @@ func (o *Orchestrator) DestroyServer(path string) error {
 
 	if len(o.servers) == 0 {
 		o.done <- nil
-	}
-
-	return nil
-}
-
-func (o *Orchestrator) DestroyAllServers() error {
-	for path := range o.servers {
-		o.DestroyServer(path)
 	}
 
 	return nil

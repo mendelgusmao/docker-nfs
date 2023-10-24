@@ -3,6 +3,7 @@ package wrapper
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -16,8 +17,16 @@ type Volume struct {
 	Name          string
 }
 
-func (v Volume) ToCLOptions() string {
-	return fmt.Sprintf(clTemplate, v.ServerAddress, v.Destination, v.Name)
+func (v Volume) ToCLOptions() []string {
+	return []string{
+		"--opt",
+		"type=nfs",
+		"--opt",
+		fmt.Sprintf("o=addr=%s,rw", v.ServerAddress),
+		"--opt",
+		fmt.Sprintf("device=:%s", v.Destination),
+		v.Name,
+	}
 }
 
 func volumeFromVOption(arg string) (*Volume, error) {
@@ -42,10 +51,23 @@ func volumeFromVOption(arg string) (*Volume, error) {
 		options = parts[2]
 	}
 
-	name := strings.Replace(strings.ToLower(source), string(os.PathSeparator), "_", -1)
+	absSource, err := filepath.Abs(source)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path for `%s`: %v\n", source, err)
+	}
+
+	name := strings.Trim(
+		strings.ReplaceAll(
+			strings.ToLower(absSource),
+			string(os.PathSeparator),
+			"_",
+		),
+		"_",
+	)
 
 	return &Volume{
-		Source:      source,
+		Source:      absSource,
 		Destination: destination,
 		Options:     options,
 		Name:        name,

@@ -3,8 +3,6 @@ package wrapper
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -57,16 +55,12 @@ func (w *Wrapper) Wrap() error {
 
 func (w *Wrapper) createNFSVolumes() error {
 	for _, volume := range w.volumes {
-		args := append(dockerVolumeCreateArgs, volume.ToCLOptions()...)
-		cmd := exec.Command(w.config.Docker.CLIPath, args...)
-
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
 		log.Printf("creating volume `%s` for `%s`\n", volume.Name, volume.Destination)
 
-		if err := cmd.Run(); err != nil {
+		args := append(dockerVolumeCreateArgs, volume.ToCLOptions()...)
+		err := execCommand(w.config.Docker.CLIPath, args...)
+
+		if err != nil {
 			return err
 		}
 
